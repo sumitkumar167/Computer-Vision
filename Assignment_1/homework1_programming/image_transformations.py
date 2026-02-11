@@ -7,14 +7,32 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+def inside_image(x, y, im):
+    H = im.shape[0]
+    W = im.shape[1]
+    return x >= 0 and x < W and y >= 0 and y < H
 
 # transform the input image im (H, W, 3) according to the 2D transformation T (3x3 matrix)
 # the output is the transformed image with the same shape (H, W, 3)
 #TODO: implementation this function
 def transform(im, T):
-
-
-                
+    H = im.shape[0]
+    W = im.shape[1]
+    im_new = np.zeros_like(im)
+    # 1. Loop over each pixel in the output image
+    for y_out in range(H):
+        for x_out in range(W):
+            # 2. Convert pixel to homogeneous coordinates
+            p_out = np.array([x_out, y_out, 1], dtype=np.float32)
+            # 3. Apply the inverse transformation to get the corresponding pixel in the input image
+            T_inv = np.linalg.inv(T)
+            p_in = np.matmul(T_inv, p_out)
+            x_in = p_in[0]
+            y_in = p_in[1]
+            # 4. Check if the pixel is within the bounds of the input image
+            if inside_image(x_in, y_in, im):
+                # 5. If it is, copy the pixel value to the output image
+                im_new[y_out, x_out] = biliniar_sample(im, x_in, y_in)                
     return im_new
 
 
