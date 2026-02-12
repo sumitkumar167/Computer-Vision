@@ -65,8 +65,10 @@ if __name__ == '__main__':
     # TODO finish the following steps to find the correspondences of the 3 pixels on image 2
     
     # Step 1: get the coordinates of 3D points for the 3 pixels from image 1
+    p3d = pcloud[index[:, 1], index[:,0], :] # shape (3, 3) where each row is the 3D coordinates of a pixel in image 1
+    print("3D points in camera 1: ")
+    print(p3d)
 
-    
     # Step 2: transform the points to the camera of image 2 using the camera poses in the meta data
     RT1 = meta1['camera_pose']
     RT2 = meta2['camera_pose']
@@ -75,7 +77,26 @@ if __name__ == '__main__':
     
     # Step 3: project the transformed 3D points to the second image
     # support the output of this step is x2d with shape (2, n) which will be used in the following visualization
+    RT1_inv = np.linalg.inv(RT1)
+    #RT2_inv = np.linalg.inv(RT2)
 
+    
+    
+    # Convert 3D points to homogeneous coordinates
+    p3d_homo = np.hstack([p3d, np.ones((p3d.shape[0], 1))])  # shape (3, 4)
+
+    # Transform from camera1 to world
+    p3d_world = (RT1_inv @ p3d_homo.T)  # shape (4, 3)
+    # Transform from world to camera2
+    p3d_cam2 = (RT2 @ p3d_world)  # shape (4, 3)
+
+    # Project onto image 2
+    p3d_cam2_3d = p3d_cam2[:3, :].T  # shape (3, 3)
+    x2d_homo = (intrinsic_matrix @ p3d_cam2_3d.T)  # shape (3, 3)
+    x2d = x2d_homo[:2, :] / x2d_homo[2, :]  # normalize by depth, shape (2, 3)
+    
+    print('2D projections in image 2:')
+    print(x2d)
     
     # visualization for your debugging
     fig = plt.figure()
