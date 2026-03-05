@@ -7,53 +7,66 @@ Harris corner detector
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import maximum_filter
 
 
-#TODO: implement this function
 # input: R is a Harris corner score matrix with shape [height, width]
-# output: mask with shape [height, width] with valuse 0 and 1, where 1s indicate corners of the input image 
+# output: mask with shape [height, width] with values 0 and 1, where 1s indicate corners of the input image
 # idea: for each pixel, check its 8 neighborhoods in the image. If the pixel is the maximum compared to these
 # 8 neighborhoods, mark it as a corner with value 1. Otherwise, mark it as non-corner with value 0
 def non_maximum_suppression(R):
-
-
+    # Apply a 3x3 max-filter over R (considers each pixel and its 8 neighbors).
+    # A pixel is a local maximum if its value equals the neighborhood maximum AND
+    # it is non-zero (i.e., it passed the threshold in step 6).
+    local_max = maximum_filter(R, size=3)
+    mask = np.zeros_like(R, dtype=np.uint8)
+    mask[(R == local_max) & (R > 0)] = 1
     return mask
 
 
-#TODO: implement this function
 # input: im is an RGB image with shape [height, width, 3]
-# output: corner_mask with shape [height, width] with valuse 0 and 1, where 1s indicate corners of the input image
+# output: corner_mask with shape [height, width] with values 0 and 1, where 1s indicate corners of the input image
 # Follow the steps in lecture_7_keypoint_features 1 slides 31-32
 # You can use opencv functions and numpy functions
 def harris_corner(im):
 
     # step 0: convert RGB to gray-scale image
+    gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    gray = np.float32(gray)
 
-    
     # step 1: compute image gradient using Sobel filters
     # https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_gradients/py_gradients.html
+    # ksize=3, ddepth=cv2.CV_64F so we keep negative gradients
+    Ix = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)   # gradient in x direction
+    Iy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)   # gradient in y direction
 
-
-    # step 2: compute products of derivatives at every pixels
-
+    # step 2: compute products of derivatives at every pixel
+    Ix2  = Ix * Ix   # Ix^2
+    Iy2  = Iy * Iy   # Iy^2
+    Ixy  = Ix * Iy   # Ix * Iy
 
     # step 3: compute the sums of products of derivatives at each pixel using Gaussian filter from OpenCV
-
+    # GaussianBlur with a 5x5 kernel and sigmaX=sigmaY=0 (let OpenCV choose sigma from kernel size)
+    Sx2  = cv2.GaussianBlur(Ix2, (5, 5), sigmaX=0)
+    Sy2  = cv2.GaussianBlur(Iy2, (5, 5), sigmaX=0)
+    Sxy  = cv2.GaussianBlur(Ixy, (5, 5), sigmaX=0)
 
     # step 4: compute determinant and trace of the M matrix
+    # M = [[Sx2, Sxy],
+    #      [Sxy, Sy2]]
+    det_M   = Sx2 * Sy2 - Sxy * Sxy   # det(M)   = Sx2*Sy2 - Sxy^2
+    trace_M = Sx2 + Sy2               # trace(M) = Sx2 + Sy2
 
-    
     # step 5: compute R scores with k = 0.05
     k = 0.05
+    R = det_M - k * (trace_M ** 2)
 
-    
     # step 6: thresholding
     # up to now, you shall get a R score matrix with shape [height, width]
     threshold = 0.01 * R.max()
     R[R < threshold] = 0
-    
+
     # step 7: non-maximum suppression
-    #TODO implement the non_maximum_suppression function above
     corner_mask = non_maximum_suppression(R)
 
     return corner_mask
