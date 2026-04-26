@@ -38,6 +38,57 @@ class YOLO(nn.Module):
 
         ### ADD YOUR CODE HERE ###
         # hint: use the modules.add_module()
+        # Output size of yolo head: 7x7x(5B+C)
+        out_features = 7 * 7 * (5 * self.num_boxes + self.num_classes)
+
+        # ------- Conv block 1: 3 -> 16 -------
+        modules.add_module('conv_1', nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_1', nn.ReLU())
+        modules.add_module('maxpool_1', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 2: 16 -> 32 -------
+        modules.add_module('conv_2', nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_2', nn.ReLU())
+        modules.add_module('maxpool_2', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 3: 32 -> 64 -------
+        modules.add_module('conv_3', nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_3', nn.ReLU())
+        modules.add_module('maxpool_3', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 4: 64 -> 128 -------
+        modules.add_module('conv_4', nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_4', nn.ReLU())
+        modules.add_module('maxpool_4', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 5: 128 -> 256 -------
+        modules.add_module('conv_5', nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_5', nn.ReLU())
+        modules.add_module('maxpool_5', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 6: 256 -> 512 -------
+        modules.add_module('conv_6', nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_6', nn.ReLU())
+        modules.add_module('maxpool_6', nn.MaxPool2d(kernel_size=2, stride=2))
+
+        # ------- Conv block 7: 512 -> 1024 -------
+        modules.add_module('conv_7', nn.Conv2d(512, 1024, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_7', nn.ReLU())
+
+        # ------- Conv block 8: 1024 -> 1024 -------
+        modules.add_module('conv_8', nn.Conv2d(1024, 1024, kernel_size=3, stride=1, padding=1))
+        modules.add_module('relu_8', nn.ReLU())
+
+        # ------- Conv block 9: 1024 -> out_features -------
+        modules.add_module('conv_9', nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0))
+        modules.add_module('relu_9', nn.ReLU())
+
+        # ------- Flatten + FC head -------
+        modules.add_module('flatten', nn.Flatten(start_dim=1, end_dim=-1))
+        modules.add_module('fc1', nn.Linear(in_features=50176, out_features=256))
+        modules.add_module('fc2', nn.Linear(in_features=256, out_features=256))
+        modules.add_module('output', nn.Linear(in_features=256, out_features=out_features))
+        modules.add_module('sigmoid', nn.Sigmoid())
 
         return modules
 
