@@ -98,6 +98,66 @@ def compute_loss(output, pred_box, gt_box, gt_mask, num_boxes, num_classes, grid
     ### ADD YOUR CODE HERE ###
     # Use weight_coord and weight_noobj defined above
 
+    # ------------- Slice the network output into per-box prediction channels -------------
+    # Each box uses 5 channels: [cx, cy, w, h, conf]; classes are at the tail
+    # Predicted (cx, cy, w, h) for box b are at output[:, 5b:5b+4, :, :]
+    # Slicing with stride 5 gives shape (batch_size, num_boxes, 7, 7)
+    pred_cx = output[:, 0:5*num_boxes: 5] # (B, num_boxes,7,7)
+    pred_cy = output[:, 1:5*num_boxes: 5]
+    pred_w = output[:, 2:5*num_boxes: 5]
+    pred_h = output[:, 3:5*num_boxes: 5]
+    pred_conf = output[:, 4:5*num_boxes: 5]
+
+    # Ground truth (cx, cy, w, h) live in gt_box channels 0-3 with shape (B,7,7)
+    # Add a singleton box dimension so they broadcast tagainst the (B, num_boxes, 7,7) predicitons
+    # box_mask handles which predictor is responsible for which gt box, and also which cells contain objects
+    gt_cx = gt_box[:, 0:1] # (B,1,7,7)
+    gt_cy = gt_box[:, 1:2]
+    gt_w = gt_box[:, 2:3]
+    gt_h = gt_box[:, 3:4]
+
+    # ------------- Coordinate losses -------------
+    # lambda_coord * sum_{i,j} 1^{obj}_{ij} (x -xHhat)^2
+    loss_x = weight_coord * torch.sum(box_mask * torch.pow(pred_cx - gt_cx, 2.0))
+    loss_y = weight_coord * torch.sum(box_mask * torch.pow(pred_cy - gt_cy, 2.0))
+
+    # -------------- Width and height losses -------------
+    # lambda_coord * sum 1^{obj}_{ij} (sqrt(w) - sqrt(w_hat))^2
+    # Sigmoid outputs are in [0,1] so sqrt is safe, but clampt at a tiny eps to keep gradients finite if a prediction is 0
+    eps = 1e-8
+    loss_w = weight_coord * torch.sum(
+                               box_mask * torch.pow(
+                                                   torch.sqrt(torch.clamp(pred_w, min=eps))
+                                                     - torch.sqrt(torch.clamp(gt_w, min=eps)),
+                                                2.0)
+                                    )
+    loss_h = weight_coord * torch.sum(
+                                 box_mask * torch.pow(
+                                                    torch.sqrt(torch.clamp(pred_h, min=eps))
+                                                      - torch.sqrt(torch.clamp(gt_h, min=eps)),
+                                                    2.0)
+                                        )
+    
+    # -------------- No-object Confidence losses -------------
+    # lambda_noobj * sum 1^{noobj}_{ij} (C - C_hat)^2
+    # 1^{noobk}_{ij} = 1 - box_mask: every (box, cell) pair that is NOT the responsible predictor for an object. Target confidence for those is 0
+    noobj_mask = 1 - box_mask
+    loss_noobj = weight_noobj * torch.sum(noobj_mask * torch.pow(pred_conf - 0.0, 2.0))
+
+    # -------------- Class losses -------------
+    # sum 1^{obj}_i sum{c} (p(c) - p_hat(c))^2
+    # The class indicator is per-cell (gt_mask), not per-box. Class scores are the trailing channels of output.
+    # With num_classes==1 the GT class probability is 1 wherever an object is present
+    if num_classes > 0:
+        pred_cls = output[:, 5*num_boxes:5*num_boxes + num_classes] # (B, C, 7, 7)
+        # add a class-dim to the per-cell mask so it broadcasts against the class predictions
+        cell_mask = gt_mask.unsqueeze(1) # (B, 1, 7, 7)
+        # Single-class case: target probability is 1 at object cells, 0 elsewhere
+        # For multi-class extension build a one-hot target from the GT class id; we just have 1 class here
+        gt_cls = cell_mask # (B, 1, 7, 7) broadcasts over classes if C>1
+        loss_cls = torch.sum(cell_mask * torch.pow(pred_cls - gt_cls, 2.0))
+    else:
+        loss_cls = torch.tensor(0.0)
     # print('lx: %.4f, ly: %.4f, lw: %.4f, lh: %.4f, lobj: %.4f, lnoobj: %.4f, lcls: %.4f' % (loss_x, loss_y, loss_w, loss_h, loss_obj, loss_noobj, loss_cls))
 
     # the totol loss
